@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package sentinel.v1;
+
+option go_package = "github.com/sentinel/sentinel/gen/sentinelv1";
+
+import "google/protobuf/timestamp.proto";
+import "profile.proto";
+import "telemetry.proto";
+import "remediation.proto";
+
+// Generic acknowledgement returned by the hub for an ingested message.
+message Ack {
+  bool   accepted                       = 1;  // true if the hub accepted it
+  string receipt_id                     = 2;  // hub-side ID for tracing
+  google.protobuf.Timestamp received_at  = 3;
+  string message                        = 4;  // human-readable note or error
+}
+
+// IngestService is the entry point the node uses to talk to the hub.
+service IngestService {
+  // Sent once at node startup: the full environment snapshot.
+  rpc SendProfile(SystemProfile) returns (Ack);
+
+  // Sent whenever the node detects an anomaly at runtime.
+  rpc SendTelemetry(TelemetryEvent) returns (Ack);
+
+  // Sent by the node after it executes a remediation plan.
+  rpc ReportExecution(ExecutionResult) returns (Ack);
+}
