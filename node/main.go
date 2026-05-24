@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,44 +16,52 @@ import (
 const hubAddress = "localhost:50051"
 
 func main() {
-	fmt.Println("Sentinel Node — starting up...")
+	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	log.Info("Sentinel Node — starting up")
 
 	// In production, node_id will be persisted to disk at install time.
 	// For now we generate a fresh one on every startup.
 	nodeID := uuid.NewString()
-	fmt.Printf("Node ID: %s\n\n", nodeID)
+	log.Info("node identity assigned", "node_id", nodeID)
 
-	// Collect the initial snapshot of the environment.
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Root context: cancelled on shutdown signal, stops everything.
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	fmt.Println("Collecting system profile...")
-	start := time.Now()
-	profile := CollectProfile(ctx, nodeID)
-	elapsed := time.Since(start)
-
-	// Human-readable dump of the collected profile.
-	printProfile(profile)
-	fmt.Printf("\nProfile collected in %s\n", elapsed.Round(time.Millisecond))
-
-	// Connect to the hub and send the profile.
-	fmt.Printf("\nConnecting to hub at %s...\n", hubAddress)
-	client, err := NewHubClient(hubAddress)
+	// Connect to the hub.
+	log.Info("connecting to hub", "address", hubAddress)
+	hub, err := NewHubClient(hubAddress)
 	if err != nil {
-		fmt.Printf("ERROR: could not create hub client: %v\n", err)
+		log.Error("could not create hub client", "error", err)
 		os.Exit(1)
 	}
-	defer client.Close()
+	defer hub.Close()
 
-	fmt.Println("Sending profile to hub...")
-	ack, err := client.SendProfile(ctx, profile)
+	// Startup snapshot: collect the environment profile and send it once.
+	profileCtx, profileCancel := context.WithTimeout(ctx, 30*time.Second)
+	log.Info("collecting system profile")
+	profile := CollectProfile(profileCtx, nodeID)
+	profileCancel()
+
+	ack, err := hub.SendProfile(ctx, profile)
 	if err != nil {
-		fmt.Printf("ERROR: failed to send profile: %v\n", err)
+		log.Error("failed to send startup profile", "error", err)
 		os.Exit(1)
 	}
+	log.Info("startup profile sent", "receipt_id", ack.GetReceiptId())
 
-	// The hub accepted the profile — print the acknowledgement.
-	fmt.Println("Profile sent successfully.")
-	fmt.Printf("  Hub receipt ID: %s\n", ack.GetReceiptId())
-	fmt.Printf("  Hub message:    %s\n", ack.GetMessage())
+	// Start the live monitoring loop in the background.
+	monitor := NewMonitor(nodeID, hub, log)
+	go monitor.Run(ctx)
+
+	// Wait for Ctrl+C or a termination signal, then shut down cleanly.
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	<-stop
+
+	log.Info("shutdown signal received, stopping")
+	cancel()
+	// Give the monitor a moment to finish its current cycle.
+	time.Sleep(500 * time.Millisecond)
+	log.Info("node stopped")
 }

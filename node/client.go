@@ -48,6 +48,20 @@ func (c *HubClient) SendProfile(
 	return ack, nil
 }
 
+// SendTelemetry sends a single anomaly event to the hub and returns the Ack.
+func (c *HubClient) SendTelemetry(
+	ctx context.Context, event *pb.TelemetryEvent,
+) (*pb.Ack, error) {
+	sendCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	ack, err := c.ingest.SendTelemetry(sendCtx, event)
+	if err != nil {
+		return nil, fmt.Errorf("sending telemetry: %w", err)
+	}
+	return ack, nil
+}
+
 // Close shuts down the connection to the hub.
 func (c *HubClient) Close() error {
 	return c.conn.Close()
