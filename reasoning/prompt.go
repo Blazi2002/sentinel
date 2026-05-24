@@ -32,6 +32,7 @@ Rules you must follow:
 - Propose the smallest, safest set of commands that addresses the cause.
 - Never propose destructive commands (no rm -rf, no mkfs, no dd to devices).
 - Never propose commands that fetch content from the internet.
+- Never leave placeholders like <PID> in a command; use concrete values.
 - If you are unsure, lower the confidence value accordingly.
 - Prefer reversible actions and always fill rollback_command when one exists.
 - Order commands by execution order.`
@@ -56,10 +57,31 @@ func BuildUserPrompt(event *pb.TelemetryEvent) string {
 		}
 	}
 
-	// Attach any contextual labels (mount point, container name, etc.).
-	if labels := event.GetLabels(); len(labels) > 0 {
-		b.WriteString("\nCONTEXT\n")
+	labels := event.GetLabels()
+
+	// The top memory-consuming processes are the single most useful
+	// piece of context for a diagnosis: give them their own section
+	// and tell the model explicitly to use them.
+	if procs, ok := labels["top_memory_processes"]; ok && procs != "" {
+		b.WriteString("\nTOP MEMORY-CONSUMING PROCESSES (at time of detection)\n")
+		for _, entry := range strings.Split(procs, " | ") {
+			b.WriteString(fmt.Sprintf("- %s\n", entry))
+		}
+		b.WriteString("Base your root cause analysis on these processes: " +
+			"identify which one is the likely culprit.\n")
+	}
+
+	// Attach any remaining contextual labels.
+	if len(labels) > 0 {
+		var wrote bool
 		for k, v := range labels {
+			if k == "top_memory_processes" {
+				continue // already shown above
+			}
+			if !wrote {
+				b.WriteString("\nCONTEXT\n")
+				wrote = true
+			}
 			b.WriteString(fmt.Sprintf("- %s: %s\n", k, v))
 		}
 	}
