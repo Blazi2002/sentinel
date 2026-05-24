@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package sentinel.v1;
+
+option go_package = "github.com/sentinel/sentinel/gen/sentinelv1";
+
+import "google/protobuf/timestamp.proto";
+
+// Gravità dell'anomalia rilevata dal nodo.
+enum Severity {
+  SEVERITY_UNSPECIFIED = 0;
+  SEVERITY_INFO        = 1;
+  SEVERITY_WARNING     = 2;
+  SEVERITY_ERROR       = 3;
+  SEVERITY_CRITICAL    = 4;
+}
+
+// Da quale stream del sistema operativo arriva l'evento.
+enum Source {
+  SOURCE_UNSPECIFIED = 0;
+  SOURCE_JOURNALD    = 1;  // log di sistema (systemd)
+  SOURCE_DOCKER      = 2;  // eventi del demone container
+  SOURCE_METRICS     = 3;  // CPU, memoria, disco, rete
+}
+
+// Identifica univocamente il server su cui gira il nodo.
+message HostInfo {
+  string hostname    = 1;
+  string ip_address  = 2;
+  string os_release  = 3;  // es. "Rocky Linux 9.3"
+  string node_id     = 4;  // UUID assegnato al nodo all'installazione
+}
+
+// Una singola metrica numerica campionata dal sistema.
+message MetricSample {
+  string name  = 1;  // es. "cpu.usage.percent"
+  double value = 2;
+  string unit  = 3;  // es. "percent", "bytes"
+}
+
+// L'evento completo che il nodo invia all'hub quando rileva un'anomalia.
+message TelemetryEvent {
+  string event_id                          = 1;  // UUID dell'evento
+  google.protobuf.Timestamp observed_at     = 2;  // quando è stato rilevato
+  HostInfo host                            = 3;
+  Source source                           = 4;
+  Severity severity                       = 5;
+
+  // Testo grezzo: riga di log, messaggio di errore, output di journald.
+  string raw_payload                       = 6;
+
+  // Metriche allegate, se l'evento proviene dallo stream metrics
+  // o se aiutano a contestualizzare l'anomalia.
+  repeated MetricSample metrics             = 7;
+
+  // Coppie chiave-valore libere: nome del container, unit systemd,
+  // PID, o qualsiasi contesto utile alla diagnosi.
+  map<string, string> labels                = 8;
+}

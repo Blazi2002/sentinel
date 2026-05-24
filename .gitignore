@@ -1,0 +1,14 @@
+# Binari compilati
+/bin/
+node/sentinel-node
+hub/__pycache__/
+
+# Ambienti virtuali Python
+hub/.venv/
+
+# File di sistema macOS
+.DS_Store
+
+# Configurazioni locali / segreti
+*.local.yaml
+.env

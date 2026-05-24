@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package sentinel.v1;
+
+option go_package = "github.com/sentinel/sentinel/gen/sentinelv1";
+
+import "google/protobuf/timestamp.proto";
+
+// Quanto è rischiosa l'azione di ripristino proposta dall'LLM.
+// Determina se può essere eseguita in automatico o richiede approvazione umana.
+enum RiskLevel {
+  RISK_LEVEL_UNSPECIFIED = 0;
+  RISK_LEVEL_LOW         = 1;  // azione reversibile, basso impatto (es. restart servizio)
+  RISK_LEVEL_MEDIUM      = 2;  // impatto contenuto ma non banale (es. modifica config)
+  RISK_LEVEL_HIGH        = 3;  // azione potenzialmente disruptiva (es. modifica rete)
+  RISK_LEVEL_CRITICAL    = 4;  // azione distruttiva o irreversibile — mai auto-eseguibile
+}
+
+// Il tipo di azione che un singolo comando rappresenta.
+// Serve al policy engine per applicare regole diverse per categoria.
+enum ActionType {
+  ACTION_TYPE_UNSPECIFIED = 0;
+  ACTION_TYPE_SHELL       = 1;  // comando bash da eseguire
+  ACTION_TYPE_SERVICE     = 2;  // operazione su servizio systemd
+  ACTION_TYPE_API_CALL    = 3;  // chiamata a un'API di sistema locale
+}
+
+// Un singolo passo di ripristino. Un piano è una sequenza ordinata di questi.
+message RemediationCommand {
+  int32 order             = 1;  // posizione nella sequenza di esecuzione (1, 2, 3...)
+  ActionType action_type  = 2;
+
+  // Il comando vero e proprio. Per ACTION_TYPE_SHELL è la stringa bash.
+  // Questo campo NON viene mai eseguito direttamente:
+  // passa sempre prima dal policy engine.
+  string command          = 3;
+
+  // Spiegazione in linguaggio naturale di cosa fa questo comando
+  // e perché. Mostrata all'operatore nella coda di approvazione.
+  string explanation      = 4;
+
+  // Comando che annulla l'effetto di questo, se esiste.
+  // Vuoto se l'azione è irreversibile.
+  string rollback_command = 5;
+}
+
+// La risposta completa dell'hub al nodo: diagnosi + piano di ripristino.
+// È l'output strutturato che l'LLM è forzato a generare.
+message RemediationPlan {
+  string plan_id                        = 1;  // UUID del piano
+  string event_id                       = 2;  // l'evento di telemetria che lo ha generato
+  google.protobuf.Timestamp generated_at = 3;
+
+  // Root Cause Analysis: la diagnosi dell'LLM in linguaggio naturale.
+  string root_cause                     = 4;
+
+  // Livello di rischio complessivo del piano (il massimo tra i comandi).
+  RiskLevel risk_level                   = 5;
+
+  // La sequenza ordinata di comandi di ripristino.
+  repeated RemediationCommand commands    = 6;
+
+  // Quanto l'LLM è "sicuro" della diagnosi, da 0.0 a 1.0.
+  // Sotto una soglia configurabile, il piano va sempre in approvazione manuale.
+  double confidence                      = 7;
+}
+
+// Esito dell'esecuzione, rimandato dal nodo all'hub dopo l'attuazione.
+message ExecutionResult {
+  string plan_id                        = 1;
+  bool   success                        = 2;
+  string output                         = 3;  // stdout/stderr catturato
+  google.protobuf.Timestamp executed_at  = 4;
+}

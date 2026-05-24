@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package sentinel.v1;
+
+option go_package = "github.com/sentinel/sentinel/gen/sentinelv1";
+
+import "google/protobuf/timestamp.proto";
+
+// L'esito della valutazione di un piano da parte del policy engine.
+enum Verdict {
+  VERDICT_UNSPECIFIED   = 0;
+  VERDICT_APPROVED      = 1;  // sicuro: eseguibile (auto o dopo conferma)
+  VERDICT_BLOCKED       = 2;  // viola una policy: non eseguibile, mai
+  VERDICT_NEEDS_REVIEW  = 3;  // richiede approvazione manuale di un operatore
+}
+
+// Perché un singolo comando è stato valutato in un certo modo.
+// Una valutazione produce zero o più di queste constatazioni.
+message PolicyFinding {
+  int32 command_order  = 1;  // a quale comando del piano si riferisce
+  string rule_id       = 2;  // identificativo della regola scattata (es. "no-rm-rf")
+  string description   = 3;  // spiegazione leggibile della constatazione
+  bool   is_blocking   = 4;  // true se da sola causa il blocco del piano
+}
+
+// La decisione completa del policy engine su un intero piano.
+message PolicyDecision {
+  string decision_id                     = 1;  // UUID della decisione
+  string plan_id                         = 2;  // il piano valutato
+  Verdict verdict                        = 3;
+  google.protobuf.Timestamp decided_at    = 4;
+
+  // Tutte le constatazioni emerse durante la valutazione.
+  repeated PolicyFinding findings         = 5;
+
+  // True se il sistema è in modalità dry-run: anche un piano APPROVED
+  // non viene eseguito, solo mostrato all'operatore.
+  bool dry_run                           = 6;
+}
+
+// Record immutabile di audit. Ogni decisione ed esecuzione ne produce uno.
+// Va su storage append-only: non si modifica e non si cancella mai.
+message AuditRecord {
+  string record_id                      = 1;
+  google.protobuf.Timestamp recorded_at   = 2;
+
+  string event_id                        = 3;
+  string plan_id                         = 4;
+  string decision_id                     = 5;
+
+  Verdict verdict                        = 6;
+  bool   executed                        = 7;  // l'azione è stata effettivamente eseguita?
+  string actor                           = 8;  // "system" o l'username dell'operatore
+
+  // Hash del record precedente: forma una catena verificabile.
+  // Se qualcuno altera un record, la catena si rompe in modo rilevabile.
+  string previous_hash                   = 9;
+}
+
+// Anello tra hub, policy engine e nodo: il pacchetto pronto per l'attuazione.
+message ActuationOrder {
+  string plan_id                         = 1;
+  PolicyDecision decision                 = 2;
+  bool   approved_by_operator             = 3;  // true se un umano ha cliccato "approve"
+  string operator_id                      = 4;  // chi ha approvato, vuoto se auto
+}
