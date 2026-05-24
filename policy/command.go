@@ -261,6 +261,38 @@ func (c *Command) RawContains(substr string) bool {
 	return strings.Contains(stripWhitespace(c.raw), stripWhitespace(substr))
 }
 
+// HasUnresolvedPlaceholder reports whether the raw command still
+// contains a template placeholder the LLM failed to fill in, such as
+// "<PID>" or "<service_name>". Such a command is not executable and
+// must be rejected outright.
+func (c *Command) HasUnresolvedPlaceholder() bool {
+	raw := c.raw
+	for i := 0; i < len(raw); i++ {
+		if raw[i] != '<' {
+			continue
+		}
+		// Look for a matching '>' with only placeholder-like text
+		// (letters, digits, underscores, spaces) in between.
+		for j := i + 1; j < len(raw); j++ {
+			ch := raw[j]
+			if ch == '>' {
+				if j > i+1 {
+					return true // non-empty <...> found
+				}
+				break
+			}
+			isPlaceholderChar := ch == '_' || ch == ' ' ||
+				(ch >= 'a' && ch <= 'z') ||
+				(ch >= 'A' && ch <= 'Z') ||
+				(ch >= '0' && ch <= '9')
+			if !isPlaceholderChar {
+				break // not a placeholder, stop scanning this '<'
+			}
+		}
+	}
+	return false
+}
+
 // --- helpers ---
 
 // baseName strips the directory part of a path: "/usr/bin/rm" -> "rm".

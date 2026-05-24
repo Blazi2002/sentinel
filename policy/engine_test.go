@@ -154,3 +154,30 @@ func TestRedirectionToSystemPathIsCaught(t *testing.T) {
 		})
 	}
 }
+
+// TestPlaceholderCommandsAreBlocked verifies that commands containing
+// unresolved placeholders (e.g. "<PID>") are blocked: they are not
+// executable and must never reach a shell.
+func TestPlaceholderCommandsAreBlocked(t *testing.T) {
+	engine := NewEngine()
+
+	cases := []struct {
+		name    string
+		command string
+	}{
+		{"angle-bracket PID", "kill -9 <PID>"},
+		{"angle-bracket process", "kill -3 $(pgrep -f <suspected_process>)"},
+		{"angle-bracket path", "systemctl restart <service_name>"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			decision := engine.Evaluate([]string{tc.command})
+			got := decision.Findings[0].Action
+			if got != ActionBlock {
+				t.Errorf("command %q: got %s, want block",
+					tc.command, got)
+			}
+		})
+	}
+}

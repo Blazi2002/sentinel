@@ -54,6 +54,18 @@ type ruleDefinition struct {
 // so rules are ordered most-dangerous first: a command that matches
 // both a block rule and a review rule is blocked.
 var ruleSet = []ruleDefinition{
+	// ---- VALIDITY: reject malformed commands before anything else ----
+	{
+		Rule: Rule{
+			ID:          "no-unresolved-placeholder",
+			Description: "Command contains an unfilled placeholder (e.g. <PID>) and is not executable",
+			Action:      ActionBlock,
+		},
+		matcher: func(c *Command) bool {
+			return c.HasUnresolvedPlaceholder()
+		},
+	},
+
 	// ---- BLOCK: destructive or forbidden, never executed ----
 	{
 		Rule: Rule{
