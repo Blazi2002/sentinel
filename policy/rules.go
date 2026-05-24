@@ -152,11 +152,14 @@ var ruleSet = []ruleDefinition{
 	{
 		Rule: Rule{
 			ID:          "review-system-config-edit",
-			Description: "Edits to system configuration files affect host behavior",
+			Description: "Edits to system or kernel paths affect host behavior",
 			Action:      ActionReview,
 		},
 		matcher: func(c *Command) bool {
-			return c.WritesUnderPath("/etc/")
+			return c.WritesUnderPath("/etc/") ||
+				c.WritesUnderPath("/proc/") ||
+				c.WritesUnderPath("/sys/") ||
+				c.WritesUnderPath("/boot/")
 		},
 	},
 	{

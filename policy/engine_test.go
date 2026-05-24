@@ -127,3 +127,30 @@ func TestNestedCommandsAreDetected(t *testing.T) {
 		})
 	}
 }
+
+// TestRedirectionToSystemPathIsCaught verifies that writing to a system
+// file via shell redirection (>, >>) does not slip past the rules.
+func TestRedirectionToSystemPathIsCaught(t *testing.T) {
+	engine := NewEngine()
+
+	cases := []struct {
+		name    string
+		command string
+	}{
+		{"append to etc file", "echo 'setting=1' >> /etc/sysconfig/network"},
+		{"overwrite etc file", "echo 'data' > /etc/hosts"},
+		{"write to proc", "echo 1 > /proc/sys/vm/drop_caches"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			decision := engine.Evaluate([]string{tc.command})
+			got := decision.Findings[0].Action
+			// Writing to a system path must AT LEAST need review.
+			if got == ActionAllow {
+				t.Errorf("command %q: got 'allow', expected review or block",
+					tc.command)
+			}
+		})
+	}
+}

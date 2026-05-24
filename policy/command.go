@@ -9,13 +9,15 @@ import (
 // Command is a parsed view of a shell command, backed by a real shell
 // grammar parser (mvdan/sh). It walks the syntax tree and extracts every
 // concrete command invocation — including ones nested inside eval,
-// sh -c, command substitutions, pipelines and && / || chains.
+// sh -c, command substitutions, pipelines and && / || chains — and the
+// targets of shell redirections (>, >>).
 //
 // Policy rules query this type through high-level methods and never
 // touch the AST directly: the method set is the stable contract.
 type Command struct {
-	raw   string       // the original command string, untouched
-	calls []invocation // every concrete invocation found in the tree
+	raw       string       // the original command string, untouched
+	calls     []invocation // every concrete invocation found in the tree
+	redirects []string     // targets of shell redirections (>, >>)
 }
 
 // invocation is one concrete command found in the parsed tree,
@@ -47,17 +49,25 @@ func NewCommand(raw string) *Command {
 	}
 
 	// Walk the syntax tree and collect every CallExpr (a concrete
-	// command invocation). For commands that re-execute a string as
-	// shell code (eval, sh -c), recursively parse that string too.
+	// command invocation) and every redirection target. For commands
+	// that re-execute a string as shell code (eval, sh -c), recursively
+	// parse that string too.
 	var pending []string
 	syntax.Walk(file, func(node syntax.Node) bool {
-		call, ok := node.(*syntax.CallExpr)
-		if !ok || len(call.Args) == 0 {
-			return true
+		switch n := node.(type) {
+		case *syntax.CallExpr:
+			if len(n.Args) == 0 {
+				return true
+			}
+			inv := invocationFromCall(n)
+			c.calls = append(c.calls, inv)
+			pending = append(pending, nestedShellStrings(inv)...)
+		case *syntax.Redirect:
+			// The target of a >, >>, etc. redirection.
+			if n.Word != nil {
+				c.redirects = append(c.redirects, wordText(n.Word))
+			}
 		}
-		inv := invocationFromCall(call)
-		c.calls = append(c.calls, inv)
-		pending = append(pending, nestedShellStrings(inv)...)
 		return true
 	})
 
@@ -65,6 +75,7 @@ func NewCommand(raw string) *Command {
 	for _, code := range pending {
 		nested := NewCommand(code)
 		c.calls = append(c.calls, nested.calls...)
+		c.redirects = append(c.redirects, nested.redirects...)
 	}
 
 	// If the walk found nothing usable, fall back so rules still see it.
@@ -224,8 +235,9 @@ func (c *Command) HasFlagLike(letter string) bool {
 	return false
 }
 
-// WritesUnderPath reports whether any invocation references a path
-// under the given directory prefix. Conservative by design: in a
+// WritesUnderPath reports whether the command references a path under
+// the given directory prefix — either as a command argument or as the
+// target of a shell redirection (>, >>). Conservative by design: in a
 // safety engine a false "review" is acceptable, a missed one is not.
 func (c *Command) WritesUnderPath(prefix string) bool {
 	for _, inv := range c.calls {
@@ -233,6 +245,11 @@ func (c *Command) WritesUnderPath(prefix string) bool {
 			if strings.HasPrefix(w, prefix) {
 				return true
 			}
+		}
+	}
+	for _, target := range c.redirects {
+		if strings.HasPrefix(target, prefix) {
+			return true
 		}
 	}
 	return false
