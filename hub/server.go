@@ -15,12 +15,13 @@ import (
 // It is the hub's entry point for everything the node sends.
 type ingestServer struct {
 	pb.UnimplementedIngestServiceServer
-	log *slog.Logger
+	log      *slog.Logger
+	pipeline *Pipeline
 }
 
-// newIngestServer builds an ingest server with the given logger.
-func newIngestServer(log *slog.Logger) *ingestServer {
-	return &ingestServer{log: log}
+// newIngestServer builds an ingest server with the given logger and pipeline.
+func newIngestServer(log *slog.Logger, pipeline *Pipeline) *ingestServer {
+	return &ingestServer{log: log, pipeline: pipeline}
 }
 
 // SendProfile receives the environment snapshot sent at node startup.
@@ -40,7 +41,8 @@ func (s *ingestServer) SendProfile(
 	return s.ack("profile stored"), nil
 }
 
-// SendTelemetry receives an anomaly event detected by the node at runtime.
+// SendTelemetry receives an anomaly event and runs it through the full
+// reasoning -> policy -> persistence pipeline.
 func (s *ingestServer) SendTelemetry(
 	ctx context.Context, e *pb.TelemetryEvent,
 ) (*pb.Ack, error) {
@@ -49,7 +51,22 @@ func (s *ingestServer) SendTelemetry(
 		"source", e.GetSource().String(),
 		"severity", e.GetSeverity().String(),
 	)
-	return s.ack("telemetry stored"), nil
+
+	// Run the chain. This calls the LLM, so it can take some seconds.
+	incidentID, err := s.pipeline.Process(ctx, e)
+	if err != nil {
+		s.log.Error("pipeline failed", "event_id", e.GetEventId(), "error", err)
+		// Tell the node we received it but processing failed.
+		return &pb.Ack{
+			Accepted:   false,
+			ReceiptId:  uuid.NewString(),
+			ReceivedAt: timestamppb.New(time.Now()),
+			Message:    "telemetry received but processing failed",
+		}, nil
+	}
+
+	s.log.Info("incident created", "incident_id", incidentID)
+	return s.ack("incident created and stored"), nil
 }
 
 // ReportExecution receives the outcome of a remediation the node ran.

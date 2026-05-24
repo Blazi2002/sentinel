@@ -13,7 +13,7 @@ import (
 // In production these will be configurable per node; hardcoded for now.
 const (
 	cpuPressureThreshold  = 80.0 // PSI stall percentage
-	memUsedPctThreshold   = 90.0 // percent of RAM in use
+	memUsedPctThreshold   = 10.0 // percent of RAM in use
 	diskUsedPctThreshold  = 90.0 // percent of any filesystem in use
 	inodeUsedPctThreshold = 90.0 // percent of inodes in use
 )

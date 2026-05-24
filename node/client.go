@@ -52,7 +52,7 @@ func (c *HubClient) SendProfile(
 func (c *HubClient) SendTelemetry(
 	ctx context.Context, event *pb.TelemetryEvent,
 ) (*pb.Ack, error) {
-	sendCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	sendCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 
 	ack, err := c.ingest.SendTelemetry(sendCtx, event)
