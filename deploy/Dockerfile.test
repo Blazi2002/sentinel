@@ -1,0 +1,26 @@
+# Test environment for the Sentinel node.
+# Rocky Linux 9 with systemd running — mirrors a real enterprise target.
+FROM rockylinux:9
+
+# systemd needs these to run inside a container.
+ENV container=docker
+
+# Install a few real services so the node has something to detect.
+RUN dnf -y install systemd nginx chrony procps-ng iproute && \
+    dnf clean all && \
+    systemctl enable nginx chronyd
+
+# Remove systemd units that don't make sense inside a container.
+RUN (cd /lib/systemd/system/sysinit.target.wants/; \
+     for i in *; do [ "$i" = systemd-tmpfiles-setup.service ] || rm -f "$i"; done) && \
+    rm -f /lib/systemd/system/multi-user.target.wants/* && \
+    rm -f /etc/systemd/system/*.wants/* && \
+    rm -f /lib/systemd/system/local-fs.target.wants/* && \
+    rm -f /lib/systemd/system/sockets.target.wants/*udev* && \
+    rm -f /lib/systemd/system/sockets.target.wants/*initctl*
+
+# The compiled Linux node binary will be copied in at run time.
+WORKDIR /opt/sentinel
+
+# systemd is the init process (PID 1).
+CMD ["/usr/sbin/init"]

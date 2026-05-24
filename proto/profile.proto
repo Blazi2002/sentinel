@@ -1,0 +1,170 @@
+syntax = "proto3";
+
+package sentinel.v1;
+
+option go_package = "github.com/sentinel/sentinel/gen/sentinelv1";
+
+import "google/protobuf/timestamp.proto";
+
+// Sistema operativo e kernel.
+message OSInfo {
+  string distribution   = 1;  // es. "Rocky Linux"
+  string version        = 2;  // es. "9.3"
+  string kernel_version = 3;  // es. "5.14.0-362.el9"
+  string architecture   = 4;  // es. "x86_64", "aarch64"
+  string hostname       = 5;
+  int64  uptime_seconds = 6;
+  string timezone       = 7;
+}
+
+// Risorse hardware fisiche.
+message HardwareInfo {
+  int32  cpu_cores         = 1;
+  string cpu_model         = 2;
+  int64  ram_total_bytes   = 3;
+  int64  disk_total_bytes  = 4;
+  repeated string gpu_models = 5;  // vuoto se nessuna GPU
+}
+
+// Un singolo filesystem montato e il suo stato di salute.
+message FilesystemInfo {
+  string mount_point      = 1;  // es. "/", "/var"
+  string device           = 2;  // es. "/dev/sda1"
+  string fs_type          = 3;  // es. "xfs", "ext4"
+  int64  total_bytes      = 4;
+  int64  used_bytes       = 5;
+  double used_percent     = 6;
+  int64  inodes_total     = 7;
+  int64  inodes_used      = 8;
+  double inodes_percent   = 9;   // disco "pieno" anche con spazio libero
+  bool   read_only        = 10;  // true se montato in sola lettura (sintomo di errore I/O)
+}
+
+// Un pacchetto software installato.
+message Package {
+  string name    = 1;
+  string version = 2;
+}
+
+// Un runtime di linguaggio rilevato sul sistema.
+message Runtime {
+  string name    = 1;  // es. "python", "java", "node"
+  string version = 2;
+  string path    = 3;
+}
+
+// Un servizio gestito da systemd.
+message Service {
+  string name         = 1;  // es. "nginx.service"
+  string active_state = 2;   // es. "active", "failed", "inactive"
+  string sub_state    = 3;   // es. "running", "dead", "exited"
+  bool   enabled      = 4;   // si avvia al boot
+}
+
+// Un processo in esecuzione al momento del profilo.
+message Process {
+  int32  pid           = 1;
+  string name          = 2;
+  double cpu_percent   = 3;
+  int64  memory_bytes  = 4;
+  string user          = 5;
+}
+
+// Un'interfaccia di rete.
+message NetworkInterface {
+  string name          = 1;  // es. "eth0"
+  repeated string ip_addresses = 2;
+  string mac_address   = 3;
+  bool   is_up         = 4;
+}
+
+// Una porta in ascolto e il processo che la tiene aperta.
+message ListeningPort {
+  int32  port          = 1;
+  string protocol      = 2;  // "tcp", "udp"
+  string process_name  = 3;
+  int32  pid           = 4;
+}
+
+// Stato di un container (Docker o Podman).
+message Container {
+  string id       = 1;
+  string name     = 2;
+  string image    = 3;
+  string state    = 4;  // es. "running", "exited"
+  string runtime  = 5;  // "docker" o "podman"
+}
+
+// Un servizio systemd in stato di fallimento.
+message FailedUnit {
+  string name        = 1;
+  string description = 2;
+  string result      = 3;  // es. "exit-code", "timeout", "oom-kill"
+}
+
+// Un messaggio critico estratto dal kernel ring buffer (dmesg).
+message KernelMessage {
+  google.protobuf.Timestamp time = 1;
+  string severity                = 2;  // es. "err", "crit", "emerg"
+  string message                 = 3;
+}
+
+// Un certificato TLS trovato sul sistema e la sua scadenza.
+message Certificate {
+  string path             = 1;
+  string subject          = 2;
+  google.protobuf.Timestamp not_after = 3;  // data di scadenza
+  int64  days_until_expiry = 4;             // negativo se già scaduto
+}
+
+// Stato di pressione sulle risorse: quanto il sistema sta soffrendo.
+message ResourcePressure {
+  int64  ram_available_bytes = 1;
+  int64  swap_total_bytes    = 2;
+  int64  swap_used_bytes     = 3;
+  // Metriche PSI del kernel: percentuale di tempo in cui i task
+  // sono in stallo in attesa della risorsa. 0 = nessuna pressione.
+  double cpu_pressure        = 4;
+  double memory_pressure     = 5;
+  double io_pressure         = 6;
+}
+
+// Stato della sincronizzazione dell'orologio di sistema.
+message TimeSync {
+  bool   synchronized   = 1;  // l'orologio è sincronizzato via NTP/chrony?
+  string sync_source    = 2;  // es. "chronyd", "systemd-timesyncd"
+  double offset_seconds = 3;  // scostamento dal tempo di riferimento
+}
+
+// Limiti e quote di sistema.
+message SystemLimits {
+  int64 max_open_files     = 1;  // ulimit -n
+  int64 max_processes      = 2;  // ulimit -u
+  map<string, string> sysctl = 3;  // sysctl di rete rilevanti
+}
+
+// La fotografia completa dell'ambiente, catturata all'avvio del nodo.
+message SystemProfile {
+  string profile_id                       = 1;
+  google.protobuf.Timestamp captured_at    = 2;
+  string node_id                          = 3;
+  string node_version                     = 4;  // versione del demone
+  string running_as_user                  = 5;
+
+  OSInfo os                               = 6;
+  HardwareInfo hardware                    = 7;
+  repeated FilesystemInfo filesystems       = 8;
+  repeated Package packages                 = 9;
+  repeated Runtime runtimes                 = 10;
+  repeated Service services                 = 11;
+  repeated Process top_processes            = 12;
+  repeated NetworkInterface interfaces      = 13;
+  repeated ListeningPort listening_ports    = 14;
+  repeated Container containers             = 15;
+  repeated FailedUnit failed_units          = 16;
+  repeated KernelMessage kernel_messages    = 17;
+  repeated Certificate certificates         = 18;
+  ResourcePressure pressure                = 19;
+  TimeSync time_sync                       = 20;
+  SystemLimits limits                      = 21;
+}
