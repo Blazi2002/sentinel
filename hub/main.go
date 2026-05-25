@@ -16,8 +16,11 @@ import (
 )
 
 const (
-	// listenAddress is the host:port the hub listens on for nodes.
-	listenAddress = "0.0.0.0:50051"
+	// grpcAddress is where nodes connect (gRPC).
+	grpcAddress = "0.0.0.0:50051"
+
+	// httpAddress is where the operator dashboard connects (HTTP API).
+	httpAddress = "0.0.0.0:8080"
 
 	// dbConnString points at the local PostgreSQL instance.
 	// In production this comes from Vault, not from source.
@@ -29,9 +32,11 @@ const (
 
 func main() {
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	log.Info("Sentinel Hub — starting up", "address", listenAddress)
+	log.Info("Sentinel Hub — starting up")
 
-	ctx := context.Background()
+	// Root context: cancelled on shutdown signal, stops everything.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Connect to PostgreSQL.
 	log.Info("connecting to database")
@@ -56,23 +61,28 @@ func main() {
 	policyEngine := policy.NewEngine()
 	pipeline := NewPipeline(reasoner, policyEngine, store, log)
 
-	// Open the TCP socket for gRPC.
-	listener, err := net.Listen("tcp", listenAddress)
+	// --- gRPC server (for nodes) ---
+	listener, err := net.Listen("tcp", grpcAddress)
 	if err != nil {
-		log.Error("failed to open listening socket", "error", err)
+		log.Error("failed to open gRPC socket", "error", err)
 		os.Exit(1)
 	}
-
 	grpcServer := grpc.NewServer()
 	pb.RegisterIngestServiceServer(grpcServer, newIngestServer(log, pipeline))
 
 	go func() {
-		log.Info("hub is ready and accepting connections")
+		log.Info("gRPC server listening", "address", grpcAddress)
 		if err := grpcServer.Serve(listener); err != nil {
 			log.Error("gRPC server stopped", "error", err)
 			os.Exit(1)
 		}
 	}()
+
+	// --- HTTP API server (for the dashboard) ---
+	api := newAPIServer(store, log)
+	go startAPIServer(ctx, httpAddress, api.routes(), log)
+
+	log.Info("hub is ready")
 
 	// Wait for a shutdown signal, then stop cleanly.
 	stop := make(chan os.Signal, 1)
@@ -80,6 +90,7 @@ func main() {
 	<-stop
 
 	log.Info("shutdown signal received, stopping gracefully")
+	cancel() // stops the HTTP API
 	grpcServer.GracefulStop()
 	log.Info("hub stopped")
 }

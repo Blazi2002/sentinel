@@ -165,3 +165,63 @@ func (s *Store) SaveIncident(ctx context.Context, in IncidentInput) (pgtype.UUID
 func (s *Store) ListIncidents(ctx context.Context) ([]db.Incident, error) {
 	return s.queries.ListIncidents(ctx)
 }
+
+// IncidentDetail is a fully-assembled incident for the dashboard:
+// the incident plus its plan, commands, policy decision and findings.
+type IncidentDetail struct {
+	Incident db.Incident
+	Plan     db.Plan
+	Commands []db.Command
+	Decision db.PolicyDecision
+	Findings []db.PolicyFinding
+}
+
+// GetIncidentDetail assembles the full picture of one incident by ID.
+func (s *Store) GetIncidentDetail(
+	ctx context.Context, id pgtype.UUID,
+) (*IncidentDetail, error) {
+	incident, err := s.queries.GetIncident(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("loading incident: %w", err)
+	}
+
+	plan, err := s.queries.GetPlanByIncident(ctx, incident.ID)
+	if err != nil {
+		return nil, fmt.Errorf("loading plan: %w", err)
+	}
+
+	commands, err := s.queries.ListCommandsByPlan(ctx, plan.ID)
+	if err != nil {
+		return nil, fmt.Errorf("loading commands: %w", err)
+	}
+
+	decision, err := s.queries.GetPolicyDecisionByPlan(ctx, plan.ID)
+	if err != nil {
+		return nil, fmt.Errorf("loading policy decision: %w", err)
+	}
+
+	findings, err := s.queries.ListFindingsByDecision(ctx, decision.ID)
+	if err != nil {
+		return nil, fmt.Errorf("loading findings: %w", err)
+	}
+
+	return &IncidentDetail{
+		Incident: incident,
+		Plan:     plan,
+		Commands: commands,
+		Decision: decision,
+		Findings: findings,
+	}, nil
+}
+
+// DecideIncident records an operator's approve/reject decision.
+func (s *Store) DecideIncident(
+	ctx context.Context, id pgtype.UUID, status, decidedBy, note string,
+) (db.Incident, error) {
+	return s.queries.UpdateIncidentDecision(ctx, db.UpdateIncidentDecisionParams{
+		ID:           id,
+		Status:       db.IncidentStatus(status),
+		DecidedBy:    &decidedBy,
+		DecisionNote: &note,
+	})
+}
