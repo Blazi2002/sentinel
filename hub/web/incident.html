@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sentinel — Incident Detail</title>
+  <style>
+    :root {
+      --bg: #0d1117; --panel: #161b22; --border: #30363d;
+      --text: #e6edf3; --muted: #8b949e;
+      --blue: #388bfd; --green: #3fb950; --amber: #d29922; --red: #f85149;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      padding: 32px; max-width: 960px;
+    }
+    a.back { color: var(--muted); text-decoration: none; font-size: 14px; }
+    a.back:hover { color: var(--text); }
+    h1 { font-size: 22px; font-weight: 600; margin: 12px 0 4px; }
+    .card {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 8px; padding: 20px; margin-top: 16px;
+    }
+    .card h2 {
+      font-size: 12px; text-transform: uppercase; color: var(--muted);
+      margin-bottom: 12px; letter-spacing: .5px;
+    }
+    .label { color: var(--muted); font-size: 13px; }
+    .value { font-size: 15px; margin-bottom: 8px; }
+    .verdict {
+      display: inline-block; padding: 4px 14px; border-radius: 14px;
+      font-weight: 600; font-size: 14px;
+    }
+    .v-approved     { background: rgba(63,185,80,.15);  color: var(--green); }
+    .v-needs_review { background: rgba(210,153,34,.15); color: var(--amber); }
+    .v-blocked      { background: rgba(248,81,73,.15);  color: var(--red); }
+    .cmd {
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 12px; margin-bottom: 10px;
+    }
+    .cmd-text {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 14px; color: var(--text); margin-bottom: 6px;
+    }
+    .cmd-why { font-size: 13px; color: var(--muted); }
+    .action {
+      display: inline-block; padding: 1px 8px; border-radius: 8px;
+      font-size: 11px; font-weight: 600; margin-left: 8px;
+    }
+    .a-allow  { background: rgba(63,185,80,.15);  color: var(--green); }
+    .a-review { background: rgba(210,153,34,.15); color: var(--amber); }
+    .a-block  { background: rgba(248,81,73,.15);  color: var(--red); }
+    .buttons { margin-top: 20px; display: flex; gap: 12px; }
+    button {
+      padding: 10px 24px; border-radius: 6px; border: none;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    .approve { background: var(--green); color: #0d1117; }
+    .reject  { background: var(--red);   color: #0d1117; }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    .decided { margin-top: 16px; font-size: 14px; }
+    .empty { color: var(--muted); padding: 40px; text-align: center; }
+  </style>
+</head>
+<body>
+  <a class="back" href="/">← Back to incidents</a>
+  <div id="content"><div class="empty">Loading…</div></div>
+
+  <script>
+    const API = "http://localhost:8080";
+    const incidentId = new URLSearchParams(location.search).get("id");
+
+    function esc(s) {
+      const d = document.createElement("div");
+      d.textContent = s == null ? "" : String(s);
+      return d.innerHTML;
+    }
+
+    async function load() {
+      const content = document.getElementById("content");
+      try {
+        const res = await fetch(API + "/api/incidents/" + incidentId);
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const d = await res.json();
+        render(d);
+      } catch (err) {
+        content.innerHTML =
+          '<div class="empty">Failed to load: ' + esc(err) + '</div>';
+      }
+    }
+
+    function render(d) {
+      const inc = d.Incident, plan = d.Plan;
+      const decision = d.Decision, findings = d.Findings || [];
+      const commands = d.Commands || [];
+
+      const commandsHTML = commands.map(c => {
+        const f = findings.find(x => x.command_order === c.command_order);
+        const action = f ? f.action : "allow";
+        return `
+          <div class="cmd">
+            <div class="cmd-text">${esc(c.command_text)}
+              <span class="action a-${action}">${esc(action)}</span></div>
+            <div class="cmd-why">${esc(c.explanation)}</div>
+          </div>`;
+      }).join("");
+
+      const status = inc.status;
+      const decided = (status !== "pending_review");
+
+      document.getElementById("content").innerHTML = `
+        <h1>${esc(inc.summary)}</h1>
+        <div class="label">Severity ${esc(inc.severity)} ·
+          Status ${esc(status.replace("_"," "))}</div>
+
+        <div class="card">
+          <h2>Root Cause Analysis — by LLM</h2>
+          <div class="value">${esc(plan.root_cause)}</div>
+          <div class="label">Risk: ${esc(plan.risk_level)} ·
+            Confidence: ${esc((plan.confidence*100).toFixed(0))}%</div>
+        </div>
+
+        <div class="card">
+          <h2>Policy Engine Verdict</h2>
+          <span class="verdict v-${decision.verdict}">
+            ${esc(decision.verdict.replace("_"," "))}</span>
+        </div>
+
+        <div class="card">
+          <h2>Proposed Remediation Commands</h2>
+          ${commandsHTML || '<div class="label">No commands.</div>'}
+        </div>
+
+        <div class="buttons">
+          <button class="approve" onclick="decide('approved')"
+            ${decided ? "disabled" : ""}>Approve</button>
+          <button class="reject" onclick="decide('rejected')"
+            ${decided ? "disabled" : ""}>Reject</button>
+        </div>
+        <div class="decided" id="decided">
+          ${decided ? "Decision recorded: " + esc(status) : ""}
+        </div>
+      `;
+    }
+
+    async function decide(decision) {
+      try {
+        const res = await fetch(
+          API + "/api/incidents/" + incidentId + "/decision", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            decision: decision,
+            operator: "operator@local",
+            note: "decided from dashboard"
+          })
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        load(); // reload to show the recorded decision
+      } catch (err) {
+        document.getElementById("decided").textContent =
+          "Failed: " + err;
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>
