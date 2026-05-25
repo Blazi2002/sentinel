@@ -27,6 +27,8 @@ func (a *apiServer) routes() http.Handler {
 	mux.HandleFunc("GET /api/incidents", a.handleListIncidents)
 	mux.HandleFunc("GET /api/incidents/{id}", a.handleGetIncident)
 	mux.HandleFunc("POST /api/incidents/{id}/decision", a.handleDecision)
+	// Serve the dashboard static files (index.html and friends).
+	mux.Handle("/", http.FileServer(http.Dir("hub/web")))
 	// Wrap everything so the browser is allowed to call the API.
 	return withCORS(mux)
 }
@@ -91,7 +93,7 @@ func (a *apiServer) handleDecision(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.log.Info("incident decision recorded",
-		"incident_id", req.Decision, "operator", req.Operator)
+		"decision", req.Decision, "operator", req.Operator)
 	a.writeJSON(w, updated)
 }
 
