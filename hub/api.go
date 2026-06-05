@@ -33,14 +33,77 @@ func (a *apiServer) routes() http.Handler {
 	return withCORS(mux)
 }
 
-// handleListIncidents returns all incidents as JSON, newest first.
+// handleListIncidents returns incidents as JSON, applying any filters
+// passed as URL query parameters: severity, status, source, search,
+// and a time window given either as a quick range (since=1h|24h|7d)
+// or as an explicit range (from=YYYY-MM-DD, to=YYYY-MM-DD).
 func (a *apiServer) handleListIncidents(w http.ResponseWriter, r *http.Request) {
-	incidents, err := a.store.ListIncidents(r.Context())
+	q := r.URL.Query()
+
+	filter := IncidentFilter{
+		Severity: q.Get("severity"),
+		Status:   q.Get("status"),
+		Source:   q.Get("source"),
+		Search:   q.Get("search"),
+	}
+
+	// Time window. Explicit from/to take precedence; otherwise a quick
+	// "since" range is translated into a lower bound.
+	from, to := parseTimeWindow(q.Get("from"), q.Get("to"), q.Get("since"))
+	if from != nil {
+		filter.From = pgtype.Timestamptz{Time: *from, Valid: true}
+	}
+	if to != nil {
+		filter.To = pgtype.Timestamptz{Time: *to, Valid: true}
+	}
+
+	incidents, err := a.store.FilterIncidents(r.Context(), filter)
 	if err != nil {
 		a.fail(w, "could not load incidents", err)
 		return
 	}
 	a.writeJSON(w, incidents)
+}
+
+// parseTimeWindow resolves the time filter into optional [from, to]
+// bounds. Explicit from/to dates (YYYY-MM-DD) win; if absent, a quick
+// "since" window (1h, 24h, 7d) becomes a from bound. Any unset bound
+// is returned as nil.
+func parseTimeWindow(fromStr, toStr, since string) (*time.Time, *time.Time) {
+	var from, to *time.Time
+
+	// Explicit dates first.
+	if fromStr != "" {
+		if t, err := time.Parse("2006-01-02", fromStr); err == nil {
+			from = &t
+		}
+	}
+	if toStr != "" {
+		if t, err := time.Parse("2006-01-02", toStr); err == nil {
+			// Include the whole "to" day: shift to end of that day.
+			end := t.Add(24*time.Hour - time.Second)
+			to = &end
+		}
+	}
+
+	// If no explicit lower bound, fall back to the quick "since" range.
+	if from == nil {
+		var d time.Duration
+		switch since {
+		case "1h":
+			d = time.Hour
+		case "24h":
+			d = 24 * time.Hour
+		case "7d":
+			d = 7 * 24 * time.Hour
+		}
+		if d > 0 {
+			t := time.Now().Add(-d)
+			from = &t
+		}
+	}
+
+	return from, to
 }
 
 // handleGetIncident returns one fully-assembled incident as JSON.

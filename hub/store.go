@@ -166,6 +166,41 @@ func (s *Store) ListIncidents(ctx context.Context) ([]db.Incident, error) {
 	return s.queries.ListIncidents(ctx)
 }
 
+// IncidentFilter holds the optional filters for listing incidents.
+// An empty string means "do not filter by this field". From and To are
+// the optional bounds of the time window; an invalid (zero) value means
+// that bound is unset.
+type IncidentFilter struct {
+	Severity string
+	Status   string
+	Source   string
+	From     pgtype.Timestamptz // zero value (Valid:false) = no lower bound
+	To       pgtype.Timestamptz // zero value (Valid:false) = no upper bound
+	Search   string
+}
+
+// FilterIncidents returns incidents matching the given filters.
+// Always returns a non-nil slice so the API emits [] rather than null.
+func (s *Store) FilterIncidents(
+	ctx context.Context, f IncidentFilter,
+) ([]db.Incident, error) {
+	incidents, err := s.queries.FilterIncidents(ctx, db.FilterIncidentsParams{
+		Severity: f.Severity,
+		Status:   f.Status,
+		Source:   f.Source,
+		FromTime: f.From,
+		ToTime:   f.To,
+		Search:   f.Search,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if incidents == nil {
+		incidents = []db.Incident{}
+	}
+	return incidents, nil
+}
+
 // IncidentDetail is a fully-assembled incident for the dashboard:
 // the incident plus its plan, commands, policy decision and findings.
 type IncidentDetail struct {

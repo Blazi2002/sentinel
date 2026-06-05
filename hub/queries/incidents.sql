@@ -39,3 +39,20 @@ UPDATE incidents
 SET status = $1
 WHERE id = $2
 RETURNING *;
+
+-- name: FilterIncidents :many
+-- Lists incidents matching optional filters. An empty/zero filter
+-- argument disables that filter. The time window is an optional
+-- [from, to] range; either bound may be null. Newest first.
+SELECT * FROM incidents
+WHERE
+    (sqlc.arg(severity)::text   = '' OR severity = sqlc.arg(severity)::text)
+    AND (sqlc.arg(status)::text = '' OR status::text = sqlc.arg(status)::text)
+    AND (sqlc.arg(source)::text = '' OR source = sqlc.arg(source)::text)
+    AND (sqlc.narg(from_time)::timestamptz IS NULL
+         OR detected_at >= sqlc.narg(from_time)::timestamptz)
+    AND (sqlc.narg(to_time)::timestamptz IS NULL
+         OR detected_at <= sqlc.narg(to_time)::timestamptz)
+    AND (sqlc.arg(search)::text = ''
+         OR summary ILIKE '%' || sqlc.arg(search)::text || '%')
+ORDER BY detected_at DESC;

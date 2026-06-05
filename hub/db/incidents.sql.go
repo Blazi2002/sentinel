@@ -57,6 +57,73 @@ func (q *Queries) CreateIncident(ctx context.Context, arg CreateIncidentParams) 
 	return i, err
 }
 
+const filterIncidents = `-- name: FilterIncidents :many
+SELECT id, event_id, node_id, severity, source, summary, status, detected_at, created_at, decided_by, decided_at, decision_note FROM incidents
+WHERE
+    ($1::text   = '' OR severity = $1::text)
+    AND ($2::text = '' OR status::text = $2::text)
+    AND ($3::text = '' OR source = $3::text)
+    AND ($4::timestamptz IS NULL
+         OR detected_at >= $4::timestamptz)
+    AND ($5::timestamptz IS NULL
+         OR detected_at <= $5::timestamptz)
+    AND ($6::text = ''
+         OR summary ILIKE '%' || $6::text || '%')
+ORDER BY detected_at DESC
+`
+
+type FilterIncidentsParams struct {
+	Severity string             `json:"severity"`
+	Status   string             `json:"status"`
+	Source   string             `json:"source"`
+	FromTime pgtype.Timestamptz `json:"from_time"`
+	ToTime   pgtype.Timestamptz `json:"to_time"`
+	Search   string             `json:"search"`
+}
+
+// Lists incidents matching optional filters. An empty/zero filter
+// argument disables that filter. The time window is an optional
+// [from, to] range; either bound may be null. Newest first.
+func (q *Queries) FilterIncidents(ctx context.Context, arg FilterIncidentsParams) ([]Incident, error) {
+	rows, err := q.db.Query(ctx, filterIncidents,
+		arg.Severity,
+		arg.Status,
+		arg.Source,
+		arg.FromTime,
+		arg.ToTime,
+		arg.Search,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Incident
+	for rows.Next() {
+		var i Incident
+		if err := rows.Scan(
+			&i.ID,
+			&i.EventID,
+			&i.NodeID,
+			&i.Severity,
+			&i.Source,
+			&i.Summary,
+			&i.Status,
+			&i.DetectedAt,
+			&i.CreatedAt,
+			&i.DecidedBy,
+			&i.DecidedAt,
+			&i.DecisionNote,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getIncident = `-- name: GetIncident :one
 SELECT id, event_id, node_id, severity, source, summary, status, detected_at, created_at, decided_by, decided_at, decision_note FROM incidents
 WHERE id = $1
