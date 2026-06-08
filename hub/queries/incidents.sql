@@ -23,6 +23,13 @@ SELECT * FROM incidents
 WHERE status = $1
 ORDER BY detected_at DESC;
 
+-- name: ListApprovedIncidentsByNode :many
+-- Lists incidents approved and awaiting execution for a given node,
+-- oldest first so they are executed in the order they were approved.
+SELECT * FROM incidents
+WHERE node_id = $1 AND status = 'approved'
+ORDER BY decided_at ASC;
+
 -- name: UpdateIncidentDecision :one
 -- Records an operator's approve/reject decision on an incident.
 UPDATE incidents

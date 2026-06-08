@@ -68,7 +68,7 @@ func main() {
 		os.Exit(1)
 	}
 	grpcServer := grpc.NewServer()
-	pb.RegisterIngestServiceServer(grpcServer, newIngestServer(log, pipeline))
+	pb.RegisterIngestServiceServer(grpcServer, newIngestServer(log, pipeline, store))
 
 	go func() {
 		log.Info("gRPC server listening", "address", grpcAddress)

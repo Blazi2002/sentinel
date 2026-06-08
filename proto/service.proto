@@ -17,6 +17,27 @@ message Ack {
   string message                        = 4;  // human-readable note or error
 }
 
+// Request sent by a node to pull the remediation plans that an operator
+// has approved for it and that are awaiting execution.
+message GetApprovedPlansRequest {
+  string node_id = 1;  // which node is asking
+}
+
+// One incident whose plan has been approved and is ready to execute.
+// Carries the commands together with their per-command policy verdict,
+// so the node's executor knows which commands it may actually run.
+message ApprovedPlan {
+  string incident_id                   = 1;  // to report the outcome back
+  string plan_id                       = 2;
+  string root_cause                    = 3;  // for logging/context
+  repeated RemediationCommand commands = 4;  // each carries policy_action
+}
+
+// Response: the list of approved plans awaiting execution on the node.
+message GetApprovedPlansResponse {
+  repeated ApprovedPlan plans = 1;
+}
+
 // IngestService is the entry point the node uses to talk to the hub.
 service IngestService {
   // Sent once at node startup: the full environment snapshot.
@@ -24,6 +45,9 @@ service IngestService {
 
   // Sent whenever the node detects an anomaly at runtime.
   rpc SendTelemetry(TelemetryEvent) returns (Ack);
+
+  // Polled by the node to fetch approved plans awaiting execution.
+  rpc GetApprovedPlans(GetApprovedPlansRequest) returns (GetApprovedPlansResponse);
 
   // Sent by the node after it executes a remediation plan.
   rpc ReportExecution(ExecutionResult) returns (Ack);

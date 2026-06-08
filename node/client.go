@@ -62,6 +62,37 @@ func (c *HubClient) SendTelemetry(
 	return ack, nil
 }
 
+// GetApprovedPlans asks the hub for plans an operator has approved for
+// this node and that are awaiting execution.
+func (c *HubClient) GetApprovedPlans(
+	ctx context.Context, nodeID string,
+) (*pb.GetApprovedPlansResponse, error) {
+	reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	resp, err := c.ingest.GetApprovedPlans(reqCtx, &pb.GetApprovedPlansRequest{
+		NodeId: nodeID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("getting approved plans: %w", err)
+	}
+	return resp, nil
+}
+
+// ReportExecution reports the outcome of an executed plan back to the hub.
+func (c *HubClient) ReportExecution(
+	ctx context.Context, result *pb.ExecutionResult,
+) (*pb.Ack, error) {
+	sendCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	ack, err := c.ingest.ReportExecution(sendCtx, result)
+	if err != nil {
+		return nil, fmt.Errorf("reporting execution: %w", err)
+	}
+	return ack, nil
+}
+
 // Close shuts down the connection to the hub.
 func (c *HubClient) Close() error {
 	return c.conn.Close()

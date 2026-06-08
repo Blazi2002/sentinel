@@ -17,11 +17,12 @@ type ingestServer struct {
 	pb.UnimplementedIngestServiceServer
 	log      *slog.Logger
 	pipeline *Pipeline
+	store    *Store
 }
 
-// newIngestServer builds an ingest server with the given logger and pipeline.
-func newIngestServer(log *slog.Logger, pipeline *Pipeline) *ingestServer {
-	return &ingestServer{log: log, pipeline: pipeline}
+// newIngestServer builds an ingest server with the given logger, pipeline and store.
+func newIngestServer(log *slog.Logger, pipeline *Pipeline, store *Store) *ingestServer {
+	return &ingestServer{log: log, pipeline: pipeline, store: store}
 }
 
 // SendProfile receives the environment snapshot sent at node startup.
@@ -69,14 +70,75 @@ func (s *ingestServer) SendTelemetry(
 	return s.ack("incident created and stored"), nil
 }
 
-// ReportExecution receives the outcome of a remediation the node ran.
+// GetApprovedPlans returns the plans an operator has approved for the
+// requesting node and that are awaiting execution. Each command carries
+// its policy verdict so the node executes only what was allowed.
+func (s *ingestServer) GetApprovedPlans(
+	ctx context.Context, req *pb.GetApprovedPlansRequest,
+) (*pb.GetApprovedPlansResponse, error) {
+	nodeID := uuidToPg(req.GetNodeId())
+
+	plans, err := s.store.ListApprovedPlansForNode(ctx, nodeID)
+	if err != nil {
+		s.log.Error("could not list approved plans",
+			"node_id", req.GetNodeId(), "error", err)
+		return nil, err
+	}
+
+	resp := &pb.GetApprovedPlansResponse{}
+	for _, pl := range plans {
+		var commands []*pb.RemediationCommand
+		for _, c := range pl.Commands {
+			commands = append(commands, &pb.RemediationCommand{
+				Order:        c.Order,
+				Command:      c.Command,
+				PolicyAction: c.Action,
+			})
+		}
+		resp.Plans = append(resp.Plans, &pb.ApprovedPlan{
+			IncidentId: pl.IncidentID,
+			PlanId:     pl.PlanID,
+			RootCause:  pl.RootCause,
+			Commands:   commands,
+		})
+	}
+
+	if len(resp.Plans) > 0 {
+		s.log.Info("approved plans delivered",
+			"node_id", req.GetNodeId(), "count", len(resp.Plans))
+	}
+	return resp, nil
+}
+
+// ReportExecution receives the outcome of a remediation the node ran and
+// updates the incident's lifecycle status accordingly.
 func (s *ingestServer) ReportExecution(
 	ctx context.Context, r *pb.ExecutionResult,
 ) (*pb.Ack, error) {
 	s.log.Info("execution result received",
 		"plan_id", r.GetPlanId(),
+		"incident_id", r.GetIncidentId(),
 		"success", r.GetSuccess(),
 	)
+
+	incidentID := uuidToPg(r.GetIncidentId())
+	if err := s.store.MarkIncidentExecuted(ctx, incidentID, r.GetSuccess()); err != nil {
+		s.log.Error("could not update incident status",
+			"incident_id", r.GetIncidentId(), "error", err)
+		return &pb.Ack{
+			Accepted:   false,
+			ReceiptId:  uuid.NewString(),
+			ReceivedAt: timestamppb.New(time.Now()),
+			Message:    "execution result received but status update failed",
+		}, nil
+	}
+
+	status := "executed"
+	if !r.GetSuccess() {
+		status = "failed"
+	}
+	s.log.Info("incident lifecycle updated",
+		"incident_id", r.GetIncidentId(), "status", status)
 	return s.ack("execution result stored"), nil
 }
 

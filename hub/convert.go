@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,6 +21,17 @@ func uuidToPg(s string) pgtype.UUID {
 	out.Bytes = parsed
 	out.Valid = true
 	return out
+}
+
+// uuidToString renders a pgtype.UUID as its canonical string form.
+// Returns an empty string if the UUID is not valid (null).
+func uuidToString(u pgtype.UUID) string {
+	if !u.Valid {
+		return ""
+	}
+	b := u.Bytes
+	return fmt.Sprintf("%x-%x-%x-%x-%x",
+		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 // timeToPg converts a time.Time into a pgtype.Timestamptz.

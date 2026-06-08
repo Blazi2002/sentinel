@@ -150,6 +150,47 @@ func (q *Queries) GetIncident(ctx context.Context, id pgtype.UUID) (Incident, er
 	return i, err
 }
 
+const listApprovedIncidentsByNode = `-- name: ListApprovedIncidentsByNode :many
+SELECT id, event_id, node_id, severity, source, summary, status, detected_at, created_at, decided_by, decided_at, decision_note FROM incidents
+WHERE node_id = $1 AND status = 'approved'
+ORDER BY decided_at ASC
+`
+
+// Lists incidents approved and awaiting execution for a given node,
+// oldest first so they are executed in the order they were approved.
+func (q *Queries) ListApprovedIncidentsByNode(ctx context.Context, nodeID pgtype.UUID) ([]Incident, error) {
+	rows, err := q.db.Query(ctx, listApprovedIncidentsByNode, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Incident
+	for rows.Next() {
+		var i Incident
+		if err := rows.Scan(
+			&i.ID,
+			&i.EventID,
+			&i.NodeID,
+			&i.Severity,
+			&i.Source,
+			&i.Summary,
+			&i.Status,
+			&i.DetectedAt,
+			&i.CreatedAt,
+			&i.DecidedBy,
+			&i.DecidedAt,
+			&i.DecisionNote,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listIncidents = `-- name: ListIncidents :many
 SELECT id, event_id, node_id, severity, source, summary, status, detected_at, created_at, decided_by, decided_at, decision_note FROM incidents
 ORDER BY detected_at DESC

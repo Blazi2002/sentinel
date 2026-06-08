@@ -91,6 +91,168 @@ func (x *Ack) GetMessage() string {
 	return ""
 }
 
+// Request sent by a node to pull the remediation plans that an operator
+// has approved for it and that are awaiting execution.
+type GetApprovedPlansRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"` // which node is asking
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetApprovedPlansRequest) Reset() {
+	*x = GetApprovedPlansRequest{}
+	mi := &file_service_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetApprovedPlansRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetApprovedPlansRequest) ProtoMessage() {}
+
+func (x *GetApprovedPlansRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_service_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetApprovedPlansRequest.ProtoReflect.Descriptor instead.
+func (*GetApprovedPlansRequest) Descriptor() ([]byte, []int) {
+	return file_service_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *GetApprovedPlansRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+// One incident whose plan has been approved and is ready to execute.
+// Carries the commands together with their per-command policy verdict,
+// so the node's executor knows which commands it may actually run.
+type ApprovedPlan struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IncidentId    string                 `protobuf:"bytes,1,opt,name=incident_id,json=incidentId,proto3" json:"incident_id,omitempty"` // to report the outcome back
+	PlanId        string                 `protobuf:"bytes,2,opt,name=plan_id,json=planId,proto3" json:"plan_id,omitempty"`
+	RootCause     string                 `protobuf:"bytes,3,opt,name=root_cause,json=rootCause,proto3" json:"root_cause,omitempty"` // for logging/context
+	Commands      []*RemediationCommand  `protobuf:"bytes,4,rep,name=commands,proto3" json:"commands,omitempty"`                    // each carries policy_action
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ApprovedPlan) Reset() {
+	*x = ApprovedPlan{}
+	mi := &file_service_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ApprovedPlan) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ApprovedPlan) ProtoMessage() {}
+
+func (x *ApprovedPlan) ProtoReflect() protoreflect.Message {
+	mi := &file_service_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ApprovedPlan.ProtoReflect.Descriptor instead.
+func (*ApprovedPlan) Descriptor() ([]byte, []int) {
+	return file_service_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ApprovedPlan) GetIncidentId() string {
+	if x != nil {
+		return x.IncidentId
+	}
+	return ""
+}
+
+func (x *ApprovedPlan) GetPlanId() string {
+	if x != nil {
+		return x.PlanId
+	}
+	return ""
+}
+
+func (x *ApprovedPlan) GetRootCause() string {
+	if x != nil {
+		return x.RootCause
+	}
+	return ""
+}
+
+func (x *ApprovedPlan) GetCommands() []*RemediationCommand {
+	if x != nil {
+		return x.Commands
+	}
+	return nil
+}
+
+// Response: the list of approved plans awaiting execution on the node.
+type GetApprovedPlansResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Plans         []*ApprovedPlan        `protobuf:"bytes,1,rep,name=plans,proto3" json:"plans,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetApprovedPlansResponse) Reset() {
+	*x = GetApprovedPlansResponse{}
+	mi := &file_service_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetApprovedPlansResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetApprovedPlansResponse) ProtoMessage() {}
+
+func (x *GetApprovedPlansResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_service_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetApprovedPlansResponse.ProtoReflect.Descriptor instead.
+func (*GetApprovedPlansResponse) Descriptor() ([]byte, []int) {
+	return file_service_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *GetApprovedPlansResponse) GetPlans() []*ApprovedPlan {
+	if x != nil {
+		return x.Plans
+	}
+	return nil
+}
+
 var File_service_proto protoreflect.FileDescriptor
 
 const file_service_proto_rawDesc = "" +
@@ -102,10 +264,22 @@ const file_service_proto_rawDesc = "" +
 	"receipt_id\x18\x02 \x01(\tR\treceiptId\x12;\n" +
 	"\vreceived_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"receivedAt\x12\x18\n" +
-	"\amessage\x18\x04 \x01(\tR\amessage2\xcf\x01\n" +
+	"\amessage\x18\x04 \x01(\tR\amessage\"2\n" +
+	"\x17GetApprovedPlansRequest\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"\xa4\x01\n" +
+	"\fApprovedPlan\x12\x1f\n" +
+	"\vincident_id\x18\x01 \x01(\tR\n" +
+	"incidentId\x12\x17\n" +
+	"\aplan_id\x18\x02 \x01(\tR\x06planId\x12\x1d\n" +
+	"\n" +
+	"root_cause\x18\x03 \x01(\tR\trootCause\x12;\n" +
+	"\bcommands\x18\x04 \x03(\v2\x1f.sentinel.v1.RemediationCommandR\bcommands\"K\n" +
+	"\x18GetApprovedPlansResponse\x12/\n" +
+	"\x05plans\x18\x01 \x03(\v2\x19.sentinel.v1.ApprovedPlanR\x05plans2\xb0\x02\n" +
 	"\rIngestService\x12;\n" +
 	"\vSendProfile\x12\x1a.sentinel.v1.SystemProfile\x1a\x10.sentinel.v1.Ack\x12>\n" +
-	"\rSendTelemetry\x12\x1b.sentinel.v1.TelemetryEvent\x1a\x10.sentinel.v1.Ack\x12A\n" +
+	"\rSendTelemetry\x12\x1b.sentinel.v1.TelemetryEvent\x1a\x10.sentinel.v1.Ack\x12_\n" +
+	"\x10GetApprovedPlans\x12$.sentinel.v1.GetApprovedPlansRequest\x1a%.sentinel.v1.GetApprovedPlansResponse\x12A\n" +
 	"\x0fReportExecution\x12\x1c.sentinel.v1.ExecutionResult\x1a\x10.sentinel.v1.AckB-Z+github.com/sentinel/sentinel/gen/sentinelv1b\x06proto3"
 
 var (
@@ -120,27 +294,35 @@ func file_service_proto_rawDescGZIP() []byte {
 	return file_service_proto_rawDescData
 }
 
-var file_service_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_service_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_service_proto_goTypes = []any{
-	(*Ack)(nil),                   // 0: sentinel.v1.Ack
-	(*timestamppb.Timestamp)(nil), // 1: google.protobuf.Timestamp
-	(*SystemProfile)(nil),         // 2: sentinel.v1.SystemProfile
-	(*TelemetryEvent)(nil),        // 3: sentinel.v1.TelemetryEvent
-	(*ExecutionResult)(nil),       // 4: sentinel.v1.ExecutionResult
+	(*Ack)(nil),                      // 0: sentinel.v1.Ack
+	(*GetApprovedPlansRequest)(nil),  // 1: sentinel.v1.GetApprovedPlansRequest
+	(*ApprovedPlan)(nil),             // 2: sentinel.v1.ApprovedPlan
+	(*GetApprovedPlansResponse)(nil), // 3: sentinel.v1.GetApprovedPlansResponse
+	(*timestamppb.Timestamp)(nil),    // 4: google.protobuf.Timestamp
+	(*RemediationCommand)(nil),       // 5: sentinel.v1.RemediationCommand
+	(*SystemProfile)(nil),            // 6: sentinel.v1.SystemProfile
+	(*TelemetryEvent)(nil),           // 7: sentinel.v1.TelemetryEvent
+	(*ExecutionResult)(nil),          // 8: sentinel.v1.ExecutionResult
 }
 var file_service_proto_depIdxs = []int32{
-	1, // 0: sentinel.v1.Ack.received_at:type_name -> google.protobuf.Timestamp
-	2, // 1: sentinel.v1.IngestService.SendProfile:input_type -> sentinel.v1.SystemProfile
-	3, // 2: sentinel.v1.IngestService.SendTelemetry:input_type -> sentinel.v1.TelemetryEvent
-	4, // 3: sentinel.v1.IngestService.ReportExecution:input_type -> sentinel.v1.ExecutionResult
-	0, // 4: sentinel.v1.IngestService.SendProfile:output_type -> sentinel.v1.Ack
-	0, // 5: sentinel.v1.IngestService.SendTelemetry:output_type -> sentinel.v1.Ack
-	0, // 6: sentinel.v1.IngestService.ReportExecution:output_type -> sentinel.v1.Ack
-	4, // [4:7] is the sub-list for method output_type
-	1, // [1:4] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	4, // 0: sentinel.v1.Ack.received_at:type_name -> google.protobuf.Timestamp
+	5, // 1: sentinel.v1.ApprovedPlan.commands:type_name -> sentinel.v1.RemediationCommand
+	2, // 2: sentinel.v1.GetApprovedPlansResponse.plans:type_name -> sentinel.v1.ApprovedPlan
+	6, // 3: sentinel.v1.IngestService.SendProfile:input_type -> sentinel.v1.SystemProfile
+	7, // 4: sentinel.v1.IngestService.SendTelemetry:input_type -> sentinel.v1.TelemetryEvent
+	1, // 5: sentinel.v1.IngestService.GetApprovedPlans:input_type -> sentinel.v1.GetApprovedPlansRequest
+	8, // 6: sentinel.v1.IngestService.ReportExecution:input_type -> sentinel.v1.ExecutionResult
+	0, // 7: sentinel.v1.IngestService.SendProfile:output_type -> sentinel.v1.Ack
+	0, // 8: sentinel.v1.IngestService.SendTelemetry:output_type -> sentinel.v1.Ack
+	3, // 9: sentinel.v1.IngestService.GetApprovedPlans:output_type -> sentinel.v1.GetApprovedPlansResponse
+	0, // 10: sentinel.v1.IngestService.ReportExecution:output_type -> sentinel.v1.Ack
+	7, // [7:11] is the sub-list for method output_type
+	3, // [3:7] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_service_proto_init() }
@@ -157,7 +339,7 @@ func file_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_service_proto_rawDesc), len(file_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   1,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

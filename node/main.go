@@ -50,8 +50,14 @@ func main() {
 	}
 	log.Info("startup profile sent", "receipt_id", ack.GetReceiptId())
 
+	// The executor runs approved plans. DRY-RUN by default: it logs what
+	// it would do without touching the system. Switch to ModeLive only
+	// in a controlled environment.
+	executor := NewExecutor(ModeDryRun, log)
+	log.Info("executor ready", "mode", executor.mode.String())
+
 	// Start the live monitoring loop in the background.
-	monitor := NewMonitor(nodeID, hub, log)
+	monitor := NewMonitor(nodeID, hub, executor, log)
 	go monitor.Run(ctx)
 
 	// Wait for Ctrl+C or a termination signal, then shut down cleanly.

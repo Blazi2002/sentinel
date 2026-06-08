@@ -42,6 +42,10 @@ message RemediationCommand {
   // Comando che annulla l'effetto di questo, se esiste.
   // Vuoto se l'azione è irreversibile.
   string rollback_command = 5;
+
+  // Il verdetto del policy engine per questo comando: "allow", "review"
+  // o "block". Riempito dall'hub. Il nodo esegue SOLO i comandi "allow".
+  string policy_action    = 6;
 }
 
 // La risposta completa dell'hub al nodo: diagnosi + piano di ripristino.
@@ -71,4 +75,8 @@ message ExecutionResult {
   bool   success                        = 2;
   string output                         = 3;  // stdout/stderr catturato
   google.protobuf.Timestamp executed_at  = 4;
+
+  // L'incidente a cui questa esecuzione si riferisce, così l'hub può
+  // aggiornarne lo stato a "executed" o "failed".
+  string incident_id                    = 5;
 }

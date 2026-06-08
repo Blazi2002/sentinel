@@ -148,8 +148,11 @@ type RemediationCommand struct {
 	// Comando che annulla l'effetto di questo, se esiste.
 	// Vuoto se l'azione è irreversibile.
 	RollbackCommand string `protobuf:"bytes,5,opt,name=rollback_command,json=rollbackCommand,proto3" json:"rollback_command,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Il verdetto del policy engine per questo comando: "allow", "review"
+	// o "block". Riempito dall'hub. Il nodo esegue SOLO i comandi "allow".
+	PolicyAction  string `protobuf:"bytes,6,opt,name=policy_action,json=policyAction,proto3" json:"policy_action,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RemediationCommand) Reset() {
@@ -213,6 +216,13 @@ func (x *RemediationCommand) GetExplanation() string {
 func (x *RemediationCommand) GetRollbackCommand() string {
 	if x != nil {
 		return x.RollbackCommand
+	}
+	return ""
+}
+
+func (x *RemediationCommand) GetPolicyAction() string {
+	if x != nil {
+		return x.PolicyAction
 	}
 	return ""
 }
@@ -318,11 +328,14 @@ func (x *RemediationPlan) GetConfidence() float64 {
 
 // Esito dell'esecuzione, rimandato dal nodo all'hub dopo l'attuazione.
 type ExecutionResult struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlanId        string                 `protobuf:"bytes,1,opt,name=plan_id,json=planId,proto3" json:"plan_id,omitempty"`
-	Success       bool                   `protobuf:"varint,2,opt,name=success,proto3" json:"success,omitempty"`
-	Output        string                 `protobuf:"bytes,3,opt,name=output,proto3" json:"output,omitempty"` // stdout/stderr catturato
-	ExecutedAt    *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=executed_at,json=executedAt,proto3" json:"executed_at,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	PlanId     string                 `protobuf:"bytes,1,opt,name=plan_id,json=planId,proto3" json:"plan_id,omitempty"`
+	Success    bool                   `protobuf:"varint,2,opt,name=success,proto3" json:"success,omitempty"`
+	Output     string                 `protobuf:"bytes,3,opt,name=output,proto3" json:"output,omitempty"` // stdout/stderr catturato
+	ExecutedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=executed_at,json=executedAt,proto3" json:"executed_at,omitempty"`
+	// L'incidente a cui questa esecuzione si riferisce, così l'hub può
+	// aggiornarne lo stato a "executed" o "failed".
+	IncidentId    string `protobuf:"bytes,5,opt,name=incident_id,json=incidentId,proto3" json:"incident_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -385,18 +398,26 @@ func (x *ExecutionResult) GetExecutedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *ExecutionResult) GetIncidentId() string {
+	if x != nil {
+		return x.IncidentId
+	}
+	return ""
+}
+
 var File_remediation_proto protoreflect.FileDescriptor
 
 const file_remediation_proto_rawDesc = "" +
 	"\n" +
-	"\x11remediation.proto\x12\vsentinel.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xcb\x01\n" +
+	"\x11remediation.proto\x12\vsentinel.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf0\x01\n" +
 	"\x12RemediationCommand\x12\x14\n" +
 	"\x05order\x18\x01 \x01(\x05R\x05order\x128\n" +
 	"\vaction_type\x18\x02 \x01(\x0e2\x17.sentinel.v1.ActionTypeR\n" +
 	"actionType\x12\x18\n" +
 	"\acommand\x18\x03 \x01(\tR\acommand\x12 \n" +
 	"\vexplanation\x18\x04 \x01(\tR\vexplanation\x12)\n" +
-	"\x10rollback_command\x18\x05 \x01(\tR\x0frollbackCommand\"\xb7\x02\n" +
+	"\x10rollback_command\x18\x05 \x01(\tR\x0frollbackCommand\x12#\n" +
+	"\rpolicy_action\x18\x06 \x01(\tR\fpolicyAction\"\xb7\x02\n" +
 	"\x0fRemediationPlan\x12\x17\n" +
 	"\aplan_id\x18\x01 \x01(\tR\x06planId\x12\x19\n" +
 	"\bevent_id\x18\x02 \x01(\tR\aeventId\x12=\n" +
@@ -408,13 +429,15 @@ const file_remediation_proto_rawDesc = "" +
 	"\bcommands\x18\x06 \x03(\v2\x1f.sentinel.v1.RemediationCommandR\bcommands\x12\x1e\n" +
 	"\n" +
 	"confidence\x18\a \x01(\x01R\n" +
-	"confidence\"\x99\x01\n" +
+	"confidence\"\xba\x01\n" +
 	"\x0fExecutionResult\x12\x17\n" +
 	"\aplan_id\x18\x01 \x01(\tR\x06planId\x12\x18\n" +
 	"\asuccess\x18\x02 \x01(\bR\asuccess\x12\x16\n" +
 	"\x06output\x18\x03 \x01(\tR\x06output\x12;\n" +
 	"\vexecuted_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"executedAt*\x80\x01\n" +
+	"executedAt\x12\x1f\n" +
+	"\vincident_id\x18\x05 \x01(\tR\n" +
+	"incidentId*\x80\x01\n" +
 	"\tRiskLevel\x12\x1a\n" +
 	"\x16RISK_LEVEL_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eRISK_LEVEL_LOW\x10\x01\x12\x15\n" +

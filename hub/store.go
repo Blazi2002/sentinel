@@ -260,3 +260,92 @@ func (s *Store) DecideIncident(
 		DecisionNote: &note,
 	})
 }
+
+// ApprovedCommand is one command of an approved plan, paired with its
+// policy verdict so the node knows whether it may execute it.
+type ApprovedCommand struct {
+	Order   int32
+	Command string
+	Action  string // "allow", "review", or "block"
+}
+
+// ApprovedPlanData is a full approved plan ready to hand to a node.
+type ApprovedPlanData struct {
+	IncidentID string
+	PlanID     string
+	RootCause  string
+	Commands   []ApprovedCommand
+}
+
+// ListApprovedPlansForNode assembles every approved-and-pending plan for
+// the given node, with each command paired to its policy verdict.
+func (s *Store) ListApprovedPlansForNode(
+	ctx context.Context, nodeID pgtype.UUID,
+) ([]ApprovedPlanData, error) {
+	incidents, err := s.queries.ListApprovedIncidentsByNode(ctx, nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("listing approved incidents: %w", err)
+	}
+
+	result := make([]ApprovedPlanData, 0, len(incidents))
+	for _, inc := range incidents {
+		plan, err := s.queries.GetPlanByIncident(ctx, inc.ID)
+		if err != nil {
+			return nil, fmt.Errorf("loading plan: %w", err)
+		}
+
+		commands, err := s.queries.ListCommandsByPlan(ctx, plan.ID)
+		if err != nil {
+			return nil, fmt.Errorf("loading commands: %w", err)
+		}
+
+		// Build a map from command order to its policy verdict.
+		verdictByOrder := map[int32]string{}
+		if decision, err := s.queries.GetPolicyDecisionByPlan(ctx, plan.ID); err == nil {
+			findings, err := s.queries.ListFindingsByDecision(ctx, decision.ID)
+			if err != nil {
+				return nil, fmt.Errorf("loading findings: %w", err)
+			}
+			for _, f := range findings {
+				verdictByOrder[f.CommandOrder] = f.Action
+			}
+		}
+
+		approvedCommands := make([]ApprovedCommand, 0, len(commands))
+		for _, c := range commands {
+			action := verdictByOrder[c.CommandOrder]
+			if action == "" {
+				action = "review" // safe default: never assume allow
+			}
+			approvedCommands = append(approvedCommands, ApprovedCommand{
+				Order:   c.CommandOrder,
+				Command: c.CommandText,
+				Action:  action,
+			})
+		}
+
+		result = append(result, ApprovedPlanData{
+			IncidentID: uuidToString(inc.ID),
+			PlanID:     uuidToString(plan.ID),
+			RootCause:  plan.RootCause,
+			Commands:   approvedCommands,
+		})
+	}
+	return result, nil
+}
+
+// MarkIncidentExecuted sets an incident's final lifecycle status after
+// the node reports the execution outcome.
+func (s *Store) MarkIncidentExecuted(
+	ctx context.Context, incidentID pgtype.UUID, success bool,
+) error {
+	status := "executed"
+	if !success {
+		status = "failed"
+	}
+	_, err := s.queries.UpdateIncidentStatus(ctx, db.UpdateIncidentStatusParams{
+		Status: db.IncidentStatus(status),
+		ID:     incidentID,
+	})
+	return err
+}

@@ -19,9 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	IngestService_SendProfile_FullMethodName     = "/sentinel.v1.IngestService/SendProfile"
-	IngestService_SendTelemetry_FullMethodName   = "/sentinel.v1.IngestService/SendTelemetry"
-	IngestService_ReportExecution_FullMethodName = "/sentinel.v1.IngestService/ReportExecution"
+	IngestService_SendProfile_FullMethodName      = "/sentinel.v1.IngestService/SendProfile"
+	IngestService_SendTelemetry_FullMethodName    = "/sentinel.v1.IngestService/SendTelemetry"
+	IngestService_GetApprovedPlans_FullMethodName = "/sentinel.v1.IngestService/GetApprovedPlans"
+	IngestService_ReportExecution_FullMethodName  = "/sentinel.v1.IngestService/ReportExecution"
 )
 
 // IngestServiceClient is the client API for IngestService service.
@@ -34,6 +35,8 @@ type IngestServiceClient interface {
 	SendProfile(ctx context.Context, in *SystemProfile, opts ...grpc.CallOption) (*Ack, error)
 	// Sent whenever the node detects an anomaly at runtime.
 	SendTelemetry(ctx context.Context, in *TelemetryEvent, opts ...grpc.CallOption) (*Ack, error)
+	// Polled by the node to fetch approved plans awaiting execution.
+	GetApprovedPlans(ctx context.Context, in *GetApprovedPlansRequest, opts ...grpc.CallOption) (*GetApprovedPlansResponse, error)
 	// Sent by the node after it executes a remediation plan.
 	ReportExecution(ctx context.Context, in *ExecutionResult, opts ...grpc.CallOption) (*Ack, error)
 }
@@ -66,6 +69,16 @@ func (c *ingestServiceClient) SendTelemetry(ctx context.Context, in *TelemetryEv
 	return out, nil
 }
 
+func (c *ingestServiceClient) GetApprovedPlans(ctx context.Context, in *GetApprovedPlansRequest, opts ...grpc.CallOption) (*GetApprovedPlansResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetApprovedPlansResponse)
+	err := c.cc.Invoke(ctx, IngestService_GetApprovedPlans_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *ingestServiceClient) ReportExecution(ctx context.Context, in *ExecutionResult, opts ...grpc.CallOption) (*Ack, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Ack)
@@ -86,6 +99,8 @@ type IngestServiceServer interface {
 	SendProfile(context.Context, *SystemProfile) (*Ack, error)
 	// Sent whenever the node detects an anomaly at runtime.
 	SendTelemetry(context.Context, *TelemetryEvent) (*Ack, error)
+	// Polled by the node to fetch approved plans awaiting execution.
+	GetApprovedPlans(context.Context, *GetApprovedPlansRequest) (*GetApprovedPlansResponse, error)
 	// Sent by the node after it executes a remediation plan.
 	ReportExecution(context.Context, *ExecutionResult) (*Ack, error)
 	mustEmbedUnimplementedIngestServiceServer()
@@ -103,6 +118,9 @@ func (UnimplementedIngestServiceServer) SendProfile(context.Context, *SystemProf
 }
 func (UnimplementedIngestServiceServer) SendTelemetry(context.Context, *TelemetryEvent) (*Ack, error) {
 	return nil, status.Error(codes.Unimplemented, "method SendTelemetry not implemented")
+}
+func (UnimplementedIngestServiceServer) GetApprovedPlans(context.Context, *GetApprovedPlansRequest) (*GetApprovedPlansResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetApprovedPlans not implemented")
 }
 func (UnimplementedIngestServiceServer) ReportExecution(context.Context, *ExecutionResult) (*Ack, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportExecution not implemented")
@@ -164,6 +182,24 @@ func _IngestService_SendTelemetry_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IngestService_GetApprovedPlans_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetApprovedPlansRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IngestServiceServer).GetApprovedPlans(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IngestService_GetApprovedPlans_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IngestServiceServer).GetApprovedPlans(ctx, req.(*GetApprovedPlansRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _IngestService_ReportExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ExecutionResult)
 	if err := dec(in); err != nil {
@@ -196,6 +232,10 @@ var IngestService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SendTelemetry",
 			Handler:    _IngestService_SendTelemetry_Handler,
+		},
+		{
+			MethodName: "GetApprovedPlans",
+			Handler:    _IngestService_GetApprovedPlans_Handler,
 		},
 		{
 			MethodName: "ReportExecution",
