@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -15,14 +17,17 @@ import (
 // In production this comes from a config file; hardcoded for now.
 const hubAddress = "localhost:50051"
 
+// nodeIDFile is where the node persists its identity, so it keeps the
+// same node_id across restarts instead of becoming a "new" node.
+const nodeIDFile = ".sentinel-node-id"
+
 func main() {
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	log.Info("Sentinel Node — starting up")
 
-	// In production, node_id will be persisted to disk at install time.
-	// For now we generate a fresh one on every startup.
-	nodeID := uuid.NewString()
-	log.Info("node identity assigned", "node_id", nodeID)
+	// Load a stable identity from disk, or create one on first run.
+	nodeID := loadOrCreateNodeID(log)
+	log.Info("node identity", "node_id", nodeID)
 
 	// Root context: cancelled on shutdown signal, stops everything.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -70,4 +75,42 @@ func main() {
 	// Give the monitor a moment to finish its current cycle.
 	time.Sleep(500 * time.Millisecond)
 	log.Info("node stopped")
+}
+
+// loadOrCreateNodeID returns a stable node identity. On first run it
+// generates a UUID and writes it to nodeIDFile; on later runs it reads
+// the existing one back, so the node keeps the same identity across
+// restarts. In production this lives at a fixed install path.
+func loadOrCreateNodeID(log *slog.Logger) string {
+	path := nodeIDFilePath()
+
+	// Try to read an existing identity.
+	if data, err := os.ReadFile(path); err == nil {
+		id := strings.TrimSpace(string(data))
+		if _, err := uuid.Parse(id); err == nil {
+			return id
+		}
+		log.Warn("stored node id is invalid, generating a new one", "path", path)
+	}
+
+	// First run (or unreadable): generate and persist a fresh identity.
+	id := uuid.NewString()
+	if err := os.WriteFile(path, []byte(id+"\n"), 0o600); err != nil {
+		// Non-fatal: fall back to an in-memory identity for this run.
+		log.Warn("could not persist node id, using ephemeral identity",
+			"path", path, "error", err)
+	} else {
+		log.Info("generated new persistent node id", "path", path)
+	}
+	return id
+}
+
+// nodeIDFilePath resolves where the identity file lives. It prefers the
+// user's home directory; if unavailable, it falls back to the working
+// directory.
+func nodeIDFilePath() string {
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, nodeIDFile)
+	}
+	return nodeIDFile
 }
