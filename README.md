@@ -2,7 +2,7 @@
 
 **Autonomous SRE for air-gapped infrastructure.** Sentinel detects infrastructure anomalies, has a *local* LLM diagnose them, validates every proposed fix through a deterministic policy engine, asks a human to approve, and then executes — all without a single byte leaving the customer's network.
 
-![Sentinel architecture](docs/architecture.png)
+![Sentinel architecture](architecture.png)
 
 > **Status — honest version.** Sentinel is a working end-to-end prototype, built as a personal learning project to go deep on distributed systems, gRPC, local LLM integration, and safe automation. It is *not* a production product. The full chain runs and is demonstrable; the "Roadmap" section below is explicit about what is finished and what is not.
 
