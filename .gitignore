@@ -12,3 +12,4 @@ hub/.venv/
 # Configurazioni locali / segreti
 *.local.yaml
 .env
+.sentinel-node-id
